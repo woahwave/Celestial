@@ -150,7 +150,7 @@ local gui = 'new'--readfile('catrewrite/profiles/gui.txt')
 if not isfolder('catrewrite/assets/'..gui) then
 	makefolder('catrewrite/assets/'..gui)
 end
-vape = loadstring(downloadFile('catrewrite/guis/'..gui..'.lua'), 'gui')()
+vape = loadstring(downloadFile('catrewrite/guis/'..gui..'.lua'), 'gui')(license)
 shared.vape = vape
 _G.vape = vape
 
