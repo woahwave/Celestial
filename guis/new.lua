@@ -372,6 +372,15 @@ local function getTableSize(tab)
 	return ind
 end
 
+local function cloneTable(tab)
+	if type(tab) ~= 'table' then return tab end
+	local cloned = {}
+	for i, v in tab do
+		cloned[i] = cloneTable(v)
+	end
+	return cloned
+end
+
 local function loopClean(tab)
 	for i, v in tab do
 		if type(v) == 'table' then
@@ -543,7 +552,7 @@ function mainapi:WatchConfigChanges(api, methods)
 				local suc, res = pcall(callback, self, ...)
 				mainapi.ConfigChangeDepth = depth
 				if not suc then error(res) end
-				if depth == 0 then
+				if depth == 0 and not mainapi.ConfigLoading then
 					mainapi:Save()
 				end
 				return res
@@ -6602,6 +6611,113 @@ function mainapi:CreateNotification(title, text, duration, type)
 	end)
 end
 
+function mainapi:GetProfileData()
+	local savedata = {
+		Modules = {},
+		Categories = {},
+		Legit = {}
+	}
+
+	for i, v in self.Categories do
+		if v.Type ~= 'Category' and i ~= 'Main' then
+			savedata.Categories[i] = {
+				Enabled = v.Button and v.Button.Enabled or nil,
+				Expanded = v.Type ~= 'Overlay' and v.Expanded or nil,
+				Pinned = v.Pinned,
+				Position = {X = v.Object.Position.X.Offset, Y = v.Object.Position.Y.Offset},
+				Options = mainapi:SaveOptions(v, v.Options),
+				List = v.List,
+				ListEnabled = v.ListEnabled
+			}
+		end
+	end
+
+	for i, v in self.Modules do
+		savedata.Modules[i] = {
+			Enabled = v.Enabled,
+			Bind = v.Bind.Button and {Mobile = true, X = v.Bind.Button.Position.X.Offset, Y = v.Bind.Button.Position.Y.Offset} or v.Bind,
+			Options = mainapi:SaveOptions(v, true)
+		}
+	end
+
+	for i, v in self.Legit.Modules do
+		savedata.Legit[i] = {
+			Enabled = v.Enabled,
+			Position = v.Children and {X = v.Children.Position.X.Offset, Y = v.Children.Position.Y.Offset} or nil,
+			Options = mainapi:SaveOptions(v, v.Options)
+		}
+	end
+
+	return cloneTable(savedata)
+end
+
+function mainapi:ApplyProfileData(savedata, skipgui, notifytoggles)
+	if savedata.Categories then
+		for i, v in savedata.Categories do
+			local object = self.Categories[i]
+			if not object then continue end
+			if object.Options and v.Options then
+				self:LoadOptions(object, v.Options)
+			end
+			if v.Pinned ~= object.Pinned then
+				object:Pin()
+			end
+			if v.Expanded ~= nil and v.Expanded ~= object.Expanded then
+				object:Expand()
+			end
+			if object.Button and (v.Enabled or false) ~= object.Button.Enabled then
+				object.Button:Toggle()
+			end
+			if v.List and (#object.List > 0 or #v.List > 0) then
+				object.List = v.List or {}
+				object.ListEnabled = v.ListEnabled or {}
+				object:ChangeValue()
+			end
+			if v.Position then
+				object.Object.Position = UDim2.fromOffset(v.Position.X, v.Position.Y)
+			end
+		end
+	end
+
+	if savedata.Modules then
+		for i, v in savedata.Modules do
+			local object = self.Modules[i]
+			if not object then continue end
+			if object.Options and v.Options then
+				self:LoadOptions(object, v.Options)
+			end
+			if (v.Enabled or false) ~= object.Enabled then
+				if skipgui and notifytoggles then
+					if self.ToggleNotifications.Enabled then self:CreateNotification('Module Toggled', i.."<font color='#FFFFFF'> has been </font>"..(v.Enabled and "<font color='#5AFF5A'>Enabled</font>" or "<font color='#FF5A5A'>Disabled</font>").."<font color='#FFFFFF'>!</font>", 0.75) end
+				end
+				object:Toggle(true)
+			end
+			if v.Bind then
+				object:SetBind(v.Bind)
+				object.Object.Bind.Visible = #v.Bind > 0
+			end
+		end
+	end
+
+	if savedata.Legit then
+		for i, v in savedata.Legit do
+			local object = self.Legit.Modules[i]
+			if not object then continue end
+			if object.Options and v.Options then
+				self:LoadOptions(object, v.Options)
+			end
+			if object.Enabled ~= (v.Enabled or false) then
+				object:Toggle()
+			end
+			if v.Position and object.Children then
+				object.Children.Position = UDim2.fromOffset(v.Position.X, v.Position.Y)
+			end
+		end
+	end
+
+	self:UpdateTextGUI(true)
+end
+
 local guipane
 function mainapi:Load(skipgui, profile, profiledata)
 	local oldloading = self.ConfigLoading
@@ -6659,76 +6775,34 @@ function mainapi:Load(skipgui, profile, profiledata)
 		self.ProfileLabel.Size = UDim2.fromOffset(getfontsize(self.ProfileLabel.Text, self.ProfileLabel.TextSize, self.ProfileLabel.Font).X + 16, 24)
 	end
 
-	if isfile('catrewrite/profiles/'..self.Profile..self.Place..'.txt') then
-		local savedata = profiledata or loadJson('catrewrite/profiles/'..self.Profile..self.Place..'.txt')
+	if not self.DefaultProfileData then
+		self.DefaultProfileData = self:GetProfileData()
+	end
+
+	local savedata
+	local skipprofileload = false
+	if profiledata then
+		savedata = profiledata
+		skipprofileload = not (savedata.Categories or savedata.Modules or savedata.Legit)
+	elseif isfile('catrewrite/profiles/'..self.Profile..self.Place..'.txt') then
+		savedata = loadJson('catrewrite/profiles/'..self.Profile..self.Place..'.txt')
 		if not savedata then
 			savedata = {Categories = {}, Modules = {}, Legit = {}}
 			self:CreateNotification('Vape', 'Failed to load '..self.Profile..' profile.', 10, 'alert')
 			savecheck = false
 		end
+	else
+		savedata = cloneTable(self.DefaultProfileData or {Categories = {}, Modules = {}, Legit = {}})
+	end
 
-		if savedata.Categories then
-			for i, v in savedata.Categories do
-				local object = self.Categories[i]
-				if not object then continue end
-				if object.Options and v.Options then
-					self:LoadOptions(object, v.Options)
-				end
-				if v.Pinned ~= object.Pinned then
-					object:Pin()
-				end
-				if v.Expanded ~= nil and v.Expanded ~= object.Expanded then
-					object:Expand()
-				end
-				if object.Button and (v.Enabled or false) ~= object.Button.Enabled then
-					object.Button:Toggle()
-				end
-				if v.List and (#object.List > 0 or #v.List > 0) then
-					object.List = v.List or {}
-					object.ListEnabled = v.ListEnabled or {}
-					object:ChangeValue()
-				end
-				object.Object.Position = UDim2.fromOffset(v.Position.X, v.Position.Y)
-			end
-		end
-
-		if savedata.Modules then
-			for i, v in savedata.Modules do
-				local object = self.Modules[i]
-				if not object then continue end
-				if object.Options and v.Options then
-					self:LoadOptions(object, v.Options)
-				end
-				if v.Enabled ~= object.Enabled then
-					if skipgui then
-						if self.ToggleNotifications.Enabled then self:CreateNotification('Module Toggled', i.."<font color='#FFFFFF'> has been </font>"..(v.Enabled and "<font color='#5AFF5A'>Enabled</font>" or "<font color='#FF5A5A'>Disabled</font>").."<font color='#FFFFFF'>!</font>", 0.75) end
-					end
-					object:Toggle(true)
-				end
-				object:SetBind(v.Bind)
-				object.Object.Bind.Visible = #v.Bind > 0
-			end
-		end
-
-		if savedata.Legit then
-			for i, v in savedata.Legit do
-				local object = self.Legit.Modules[i]
-				if not object then continue end
-				if object.Options and v.Options then
-					self:LoadOptions(object, v.Options)
-				end
-				if object.Enabled ~= v.Enabled then
-					object:Toggle()
-				end
-				if v.Position and object.Children then
-					object.Children.Position = UDim2.fromOffset(v.Position.X, v.Position.Y)
-				end
-			end
-		end
-
+	if skipprofileload then
 		self:UpdateTextGUI(true)
 	else
-		self:Save()
+		local defaultdata = self.DefaultProfileData and cloneTable(self.DefaultProfileData)
+		if defaultdata and savedata ~= defaultdata then
+			self:ApplyProfileData(defaultdata, skipgui, false)
+		end
+		self:ApplyProfileData(savedata, skipgui, true)
 	end
 
 	if self.Downloader then
@@ -6830,7 +6904,7 @@ function mainapi:Remove(obj)
 end
 
 function mainapi:Save(newprofile)
-	if not self.Loaded then return end
+	if not self.Loaded or self.ConfigLoading then return end
 	print("saved")
 	local guidata = {
 		Categories = {},
@@ -6838,38 +6912,20 @@ function mainapi:Save(newprofile)
 		Profiles = self.Profiles,
 		Keybind = self.Keybind
 	}
-	local savedata = {
-		Modules = {},
-		Categories = {},
-		Legit = {}
-	}
+	local savedata = self:GetProfileData()
 
 	for i, v in self.Categories do
-		(v.Type ~= 'Category' and i ~= 'Main' and savedata or guidata).Categories[i] = {
-			Enabled = i ~= 'Main' and v.Button.Enabled or nil,
-			Expanded = v.Type ~= 'Overlay' and v.Expanded or nil,
-			Pinned = v.Pinned,
-			Position = {X = v.Object.Position.X.Offset, Y = v.Object.Position.Y.Offset},
-			Options = mainapi:SaveOptions(v, v.Options),
-			List = v.List,
-			ListEnabled = v.ListEnabled
-		}
-	end
-
-	for i, v in self.Modules do
-		savedata.Modules[i] = {
-			Enabled = v.Enabled,
-			Bind = v.Bind.Button and {Mobile = true, X = v.Bind.Button.Position.X.Offset, Y = v.Bind.Button.Position.Y.Offset} or v.Bind,
-			Options = mainapi:SaveOptions(v, true)
-		}
-	end
-
-	for i, v in self.Legit.Modules do
-		savedata.Legit[i] = {
-			Enabled = v.Enabled,
-			Position = v.Children and {X = v.Children.Position.X.Offset, Y = v.Children.Position.Y.Offset} or nil,
-			Options = mainapi:SaveOptions(v, v.Options)
-		}
+		if v.Type == 'Category' or i == 'Main' then
+			guidata.Categories[i] = {
+				Enabled = i ~= 'Main' and v.Button.Enabled or nil,
+				Expanded = v.Type ~= 'Overlay' and v.Expanded or nil,
+				Pinned = v.Pinned,
+				Position = {X = v.Object.Position.X.Offset, Y = v.Object.Position.Y.Offset},
+				Options = mainapi:SaveOptions(v, v.Options),
+				List = v.List,
+				ListEnabled = v.ListEnabled
+			}
+		end
 	end
 
 	writefile('catrewrite/profiles/'..game.GameId..'.gui.txt', httpService:JSONEncode(guidata))

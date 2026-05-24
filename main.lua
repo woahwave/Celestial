@@ -82,12 +82,17 @@ local function finishLoading()
 			teleportedServers = true
 			local teleportScript = [[
 				if shared.VapeDeveloper then
-					loadstring(readfile('catrewrite/init.lua'), 'init')({Key = '_key'})
+					loadstring(readfile('catrewrite/init.lua'), 'init')(_scriptconfig)
 				else
-					loadstring(game:HttpGet('https://api.catvape.dev/script?key=_key'), 'init')()
+					loadstring(game:HttpGet('https://api.catvape.dev/script?key=_key'), 'init')(_scriptconfig)
 				end
 			]]
+			local teleportConfig = httpService:JSONEncode(license)
+			teleportConfig = teleportConfig:gsub('":true', "=true"):gsub('{"', '{')
+			teleportConfig = teleportConfig:gsub(',"', ','):gsub('":', '=')
+			
 			teleportScript = teleportScript:gsub('_key', tostring(license.Key or '_key'))
+			teleportScript = teleportScript:gsub('_scriptconfig', teleportConfig)
 			if shared.VapeDeveloper then
 				teleportScript = 'shared.VapeDeveloper = true\n'..teleportScript
 			end
