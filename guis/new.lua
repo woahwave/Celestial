@@ -5527,7 +5527,8 @@ function mainapi:Load(skipgui, profile)
 		guidata = loadJson('catrewrite/profiles/'..game.GameId..'.gui.txt')
 		if not guidata then
 			guidata = {Categories = {}}
-			self:CreateNotification('Vape', 'Failed to load GUI settings.', 10, 'alert')
+			self:CreateNotification('Vape', 'Failed to load GUI settings, Try rejoining ur game', 10, 'alert')
+			delfile('catrewrite/profiles/'..game.GameId..'.gui.txt')
 			savecheck = false
 		end
 

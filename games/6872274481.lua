@@ -60,6 +60,7 @@ local function downloadFile(path, func)
 	return (func or readfile)(path)
 end
 
+local rankCache = {}
 local store = {
 	lastHit = 0,
 	attackReach = 0,
@@ -633,7 +634,10 @@ run(function()
 					end))
 				else
 					entity.Targetable = entitylib.targetCheck(entity)
-
+					table.insert(entity.Connections, hum.AnimationPlayed:Connect(function(track)
+						entitylib.Events.AnimationPlayed:Fire(plr, track)
+					end))
+					
 					for _, v in entitylib.getUpdateConnections(entity) do
 						table.insert(entity.Connections, v:Connect(function()
 							entity.Health = (char:GetAttribute('Health') or 100) + getShieldAttribute(char)
@@ -815,7 +819,7 @@ run(function()
 		SoundList = require(replicatedStorage.TS.sound['game-sound']).GameSound,
 		SoundManager = require(replicatedStorage['rbxts_include']['node_modules']['@easy-games']['game-core'].out).SoundManager,
 		Store = require(lplr.PlayerScripts.TS.ui.store).ClientStore,
-		TeamUpgradeMeta = debug.getupvalue(require(replicatedStorage.TS.games.bedwars['team-upgrade']['team-upgrade-meta']).getTeamUpgradeMetaForQueue, 6),
+		TeamUpgradeMeta = debug.getupvalue(require(replicatedStorage.TS.games.bedwars['team-upgrade']['team-upgrade-meta']).getTeamUpgradeMetaForQueue, 7),
 		UILayers = require(replicatedStorage['rbxts_include']['node_modules']['@easy-games']['game-core'].out).UILayers,
 		VisualizerUtils = require(lplr.PlayerScripts.TS.lib.visualizer['visualizer-utils']).VisualizerUtils,
 		WeldTable = require(replicatedStorage.TS.util['weld-util']).WeldUtil,
@@ -835,7 +839,7 @@ run(function()
 					if plr and plr.Character then
 						for i in plr.Character:GetAttributes() do
 							if i:find('StatusEffect_') and not i:find('_stacks') then
-								local name = bedwars.StatusEffectMeta[({ i:gsub('StatusEffect_', '') })[1]]
+								local name = bedwars.StatusEffectMeta[({i:gsub('StatusEffect_', '')})[1]]
 								if bedwars.StatusEffectMeta[name] then
 									name = bedwars.StatusEffectMeta[name]
 									for num = 1, 3 do
@@ -3243,66 +3247,6 @@ run(function()
     	end,
         Tooltip = 'Makes you go slightly faster when damaged'
     })
-end)
-
-run(function()
-    
-    local Desync
-    
-    local hook
-    local function Buffer(mode)
-        if mode == 'max_u32' then
-            local Floor = math.floor((2 ^ 16) * (2 ^ 16))
-            local Abs = math.abs(math.cos(math.pi))
-            return Floor - Abs
-        elseif mode == 'packet_id' then
-            local Offset = math.floor(math.sqrt(9))
-            return (math.sqrt(9)) * (2 ^ 3) + Offset
-        end
-        return 0
-    end
-    local function Resync()
-        if entitylib.isAlive then
-            entitylib.character.RootPart.CFrame += Vector3.new(math.nan, math.nan, math.nan)
-            notif('Desync', 'Resynced', 2, 'info')
-        end
-    end
-    
-    Desync = vape.Categories.Blatant:CreateModule({
-        Name = 'Desync',
-        Function = function(callback)
-            if callback then
-                if not rakNetCheck('Desync') then
-                    Desync:Toggle()
-                    return
-                end
-    
-                hook = function(packet)
-                    if not packet.AsArray or packet.AsArray[1] ~= Buffer('packet_id') then
-                        return
-                    end
-    
-                    local data = packet.AsBuffer
-                    if data then
-                        buffer.writeu32(data, 1, Buffer('max_u32'))
-                        buffer.writeu8(data, 25, 7)
-    
-                        packet:SetData(data)
-                    end
-                end
-                raknet.add_send_hook(hook)
-                if entitylib.isAlive and store.matchState ~= 0 then
-                    entitylib.character.Humanoid.Health = 0
-                    notif('Desync', 'Resyncing, If you flag multiple times, you have to retoggle!', 8, 'info')
-                end
-            elseif hook then
-                raknet.remove_send_hook(hook)
-            end
-        end,
-        Tooltip = 'Prevent the server from replicating your current position to other players.'
-    })
-    
-    Desync:CreateButton({Name = 'Resync', Function = Resync})
 end)
 
 run(function()
@@ -9240,14 +9184,11 @@ run(function()
     				end
     
     				local root, mass, dir, knockback = ...
-    				if
-    					not TargetCheck.Enabled
-    					or entitylib.EntityPosition({
-    						Range = 50,
-    						Part = 'RootPart',
-    						Players = true,
-    					})
-    				then
+    				if not TargetCheck.Enabled or entitylib.EntityPosition({
+    					Range = 50,
+    					Part = 'RootPart',
+    					Players = true,
+    				}) then
     					local env = {}
     					task.delay(AirDelay:GetRandomValue() / 1000, apply, 'horizontal', env, root, mass, dir, knockback, select(5, ...))
     					task.delay(GroundDelay:GetRandomValue() / 1000, apply, 'vertical', env, root, mass, dir, knockback, select(5, ...))
