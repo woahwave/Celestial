@@ -368,6 +368,7 @@ local function loadJson(path)
 	return suc and type(res) == 'table' and res or nil
 end
 
+local newModules = loadJson('catrewrite/profiles/features.json')
 local function makeDraggable(gui, window)
 	gui.InputBegan:Connect(function(inputObj)
 		if window and not window.Visible then return end
@@ -2503,7 +2504,7 @@ function mainapi:CreateGUI()
 	makeDraggable(window)
 	local logo = Instance.new('ImageLabel')
 	logo.Name = 'VapeLogo'
-	logo.Size = UDim2.fromOffset(48, 18)
+	logo.Size = UDim2.fromOffset(62, 18)
 	logo.Position = UDim2.fromOffset(11, 10)
 	logo.BackgroundTransparency = 1
 	logo.Image = getcustomasset('catrewrite/assets/new/guivape.png')
@@ -3725,6 +3726,7 @@ function mainapi:CreateCategory(categorysettings)
 			Enabled = false,
 			Options = {},
 			Bind = {},
+			Tags = {},
 			Index = getTableSize(mainapi.Modules),
 			ExtraText = modulesettings.ExtraText,
 			Name = modulesettings.Name,
@@ -3744,6 +3746,55 @@ function mainapi:CreateCategory(categorysettings)
 		modulebutton.TextSize = 14
 		modulebutton.FontFace = uipallet.Font
 		modulebutton.Parent = children
+		local indicatorholder = Instance.new('Frame')
+		indicatorholder.Parent = modulebutton
+		indicatorholder.Size = UDim2.fromOffset(0, 21)
+		indicatorholder.AnchorPoint = Vector2.new(0, 0.5)
+		indicatorholder.Name = 'Indicators'
+		indicatorholder.BackgroundTransparency = 1
+		indicatorholder.Position = UDim2.fromScale(0.85, 0.5)
+
+		do
+			local layout = Instance.new('UIListLayout')
+			layout.Parent = indicatorholder
+			layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+			layout.VerticalAlignment = Enum.VerticalAlignment.Center
+			layout.FillDirection = Enum.FillDirection.Horizontal
+			layout.Padding = UDim.new(0, 5)
+		end
+
+		modulesettings.Tags = modulesettings.Tags or {}
+		if table.find(newModules, moduleapi.Name) then
+			table.insert(modulesettings.Tags, 'new')
+		end
+		for i, tag in modulesettings.Tags do
+			tag = tag:upper()
+			local size = getfontsize(removeTags(tag), 12, uipallet.Font, Vector2.new(100000, 100000))
+			local indicator = Instance.new('TextLabel')
+			indicator.LayoutOrder = i - 1
+			indicator.Size = UDim2.new(0, size.X + 4, 0, 21)
+			indicator.BackgroundColor3 = Color3.new(1, 1, 1)
+			indicator.TextSize = 14
+			indicator.TextTransparency = 1
+			indicator.Text = tag
+			indicator.Name = tag
+			indicator.Position = UDim2.new()
+			indicator.TextColor3 = Color3.new(0, 0, 0)
+			indicator.FontFace = uipallet.Font
+			indicator.Parent = indicatorholder
+			addCorner(indicator, UDim.new(0, 5))
+			local text = indicator:Clone()
+			text.Position = UDim2.new()
+			text.Size = UDim2.fromScale(1, 1)
+			text.BackgroundTransparency = 1
+			text.Name = 'Text'
+			text.AnchorPoint = Vector2.new()
+			text.TextSize = 12
+			text.TextTransparency = 0
+			text.Parent = indicator
+			table.insert(moduleapi.Tags, indicator)
+			indicator.Visible = tag ~= 'MATCHED'
+		end
 		local gradient = Instance.new('UIGradient')
 		gradient.Rotation = 90
 		gradient.Enabled = false
@@ -7107,6 +7158,12 @@ function mainapi:UpdateGUI(hue, sat, val, default)
 			if option.Color then
 				option:Color(hue, sat, val, rainbow)
 			end
+		end
+
+		for _, v in button.Tags do
+			v.BackgroundColor3 = rainbow and Color3.fromHSV(mainapi:Color((hue - (button.Index * 0.025)) % 1)) or button.Enabled and Color3.new(1, 1, 1) or Color3.fromHSV(hue, sat, val)
+			v.BackgroundTransparency = (rainbow or not button.Enabled) and 0 or 0.85
+			v:FindFirstChild('Text').TextColor3 = mainapi.GUIColor.Rainbow and Color3.new(0.19, 0.19, 0.19) or mainapi:TextColor(hue, sat, val)
 		end
 	end
 

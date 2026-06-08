@@ -113,10 +113,15 @@ local function finishLoading()
 				getgenv().catrole = ''
 				task.wait(0.1)
 			end
-			if vape.Place ~= 6872274481 and not license.Closet then
+			if vape.Place ~= 6872274481 then
 				task.spawn(redirect)
 			end
 			vape:CreateNotification('Finished Loading', (getgenv().catname and `Authenticated as {getgenv().catname} with {getgenv().catrole}, ` or '').. (vape.VapeButton and 'Press the button in the top right' or 'Press '..table.concat(vape.Keybind, ' + '):upper())..' to open GUI', 5)
+			task.delay(1, function()
+				if shared.updated then
+					vape:CreateNotification('Cat', `Script has updated from {shared.updated} to {readfile('catrewrite/profiles/commit.txt')}`, 10, 'info')
+				end
+			end)
 		end
 	end
 end
