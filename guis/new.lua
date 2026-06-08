@@ -368,6 +368,7 @@ local function loadJson(path)
 	return suc and type(res) == 'table' and res or nil
 end
 
+downloadFile('catrewrite/profiles/features.json') -- im an idiot
 local newModules = loadJson('catrewrite/profiles/features.json') or {}
 local function makeDraggable(gui, window)
 	gui.InputBegan:Connect(function(inputObj)
@@ -3764,7 +3765,7 @@ function mainapi:CreateCategory(categorysettings)
 		end
 
 		modulesettings.Tags = modulesettings.Tags or {}
-		
+
 		pcall(function()
 			if table.find(newModules, moduleapi.Name) then
 				table.insert(modulesettings.Tags, 'new')
